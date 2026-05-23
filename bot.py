@@ -4,11 +4,11 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 import logging
-import os  # 🔥 WICHTIG
+import os
 
 logging.basicConfig(level=logging.ERROR)
 
-# 🔥 OPUS FIX
+# 🔥 OPUS FIX (optional)
 if not discord.opus.is_loaded():
     try:
         discord.opus.load_opus("libopus.so.0")
@@ -18,7 +18,12 @@ if not discord.opus.is_loaded():
         except:
             print("❌ OPUS NICHT GEFUNDEN")
 
-intents = discord.Intents.all()
+# ✅ WICHTIGER FIX (INTENTS)
+intents = discord.Intents.default()
+intents.message_content = True
+intents.voice_states = True
+intents.guilds = True
+
 bot = commands.Bot(command_prefix=".", intents=intents)
 
 queues = {}
@@ -29,7 +34,6 @@ skip_votes = {}
 @bot.event
 async def on_ready():
     print(f"Online als {bot.user}")
-
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.listening,
@@ -75,22 +79,9 @@ async def get_song(search):
 # ================= PLAY NEXT =================
 def play_next(ctx):
     vc = ctx.voice_client
-
     skip_votes[ctx.guild.id] = set()
 
     if ctx.guild.id not in queues or len(queues[ctx.guild.id]) == 0:
-
-        async def leave():
-            await asyncio.sleep(180)
-            vc2 = ctx.voice_client
-            if vc2 and not vc2.is_playing():
-                try:
-                    await vc2.disconnect()
-                    await ctx.send("👋 Verlasse Call wegen Inaktivität")
-                except:
-                    pass
-
-        asyncio.run_coroutine_threadsafe(leave(), bot.loop)
         return
 
     song = queues[ctx.guild.id].pop(0)
@@ -153,79 +144,29 @@ async def skip(ctx):
     if not vc or not vc.is_playing():
         return await ctx.send("❌ Es läuft nichts")
 
-    if not ctx.author.voice or ctx.author.voice.channel != vc.channel:
-        return await ctx.send("❌ Du musst im gleichen Call sein!")
-
-    members = [m for m in vc.channel.members if not m.bot]
-    required = len(members) // 2 + 1
-
-    if ctx.guild.id not in skip_votes:
-        skip_votes[ctx.guild.id] = set()
-
-    skip_votes[ctx.guild.id].add(ctx.author.id)
-
-    votes = len(skip_votes[ctx.guild.id])
-
-    if votes >= required:
-        skip_votes[ctx.guild.id] = set()
-        vc.stop()
-        await ctx.send("⏭️ Song übersprungen!")
-    else:
-        await ctx.send(f"⏭️ Votes: {votes}/{required}")
+    vc.stop()
+    await ctx.send("⏭️ Übersprungen")
 
 # ================= STOP =================
 @bot.command()
 async def stop(ctx):
-    if not ctx.author.guild_permissions.administrator:
-        return await ctx.send("❌ Nur Admins!")
-
     if ctx.voice_client:
-        queues[ctx.guild.id] = []
         await ctx.voice_client.disconnect()
         await ctx.send("🛑 Gestoppt")
 
+# ================= /HELP =================
 from discord import app_commands
 
-# ================= SLASH SYNC =================
 @bot.event
 async def setup_hook():
     await bot.tree.sync()
 
-# ================= /HELP =================
-@bot.tree.command(name="help", description="Hilfe Zur Verwendung")
+@bot.tree.command(name="help", description="Hilfe")
 async def help_slash(interaction: discord.Interaction):
-
-    embed = discord.Embed(
-        title="🎵 Music Bot Help",
-        description="Hier sind alle Commands:",
-        color=discord.Color.light_grey()
-    )
-
-    embed.add_field(
-        name="▶️ Musik",
-        value="""
-.play <song> → Spielt Musik
-.skip → Vote Skip
-.stop → Stoppt Musik (Admin)
-""",
-        inline=False
-    )
-
-    embed.add_field(
-        name="ℹ️ Info",
-        value="""
-Bot verlässt Call nach 3 Minuten Inaktivität
-""",
-        inline=False
-    )
-
-    embed.set_footer(text="Secretix Music Bot")
-
-    await interaction.response.send_message(embed=embed, ephemeral=True)
+    await interaction.response.send_message("Benutze .play <song>", ephemeral=True)
 
 # ================= START =================
-bot.run(os.getenv("TOKEN"))  # 🔥 SICHER
-
+bot.run(os.getenv("TOKEN"))
 
 
 
